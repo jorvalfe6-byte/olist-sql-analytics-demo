@@ -85,9 +85,10 @@ base AS (
     FROM mart.fact_order WHERE is_valid GROUP BY customer_unique_id
 ),
 rfm AS (
-    SELECT *, 6 - NTILE(5) OVER (ORDER BY recencia) AS r,
+    -- CUME_DIST en vez de NTILE: los empatados caen en el mismo quintil (determinista)
+    SELECT *, 6 - GREATEST(1, CEIL(5 * CUME_DIST() OVER (ORDER BY recencia)))::INT AS r,
            CASE WHEN frecuencia >= 3 THEN 5 WHEN frecuencia = 2 THEN 4 ELSE 1 END AS f,
-           NTILE(5) OVER (ORDER BY valor) AS m
+           GREATEST(1, CEIL(5 * CUME_DIST() OVER (ORDER BY valor)))::INT AS m
     FROM base
 ),
 seg AS (

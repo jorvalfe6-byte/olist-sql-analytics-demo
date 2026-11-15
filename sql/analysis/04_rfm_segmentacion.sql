@@ -5,8 +5,10 @@
 -- Recencia: días entre la última compra y la fecha de corte del dataset.
 -- Frecuencia: pedidos válidos. Valor: GMV del cliente.
 -- Como el 97 % de los clientes compra una sola vez, la frecuencia se
--- puntúa con reglas fijas (1, 2, 3+) en vez de quintiles: NTILE sobre
--- una columna casi constante repartiría empates al azar.
+-- puntúa con reglas fijas (1, 2, 3+) en vez de quintiles.
+-- R y M usan quintiles con CUME_DIST y no NTILE: NTILE reparte al azar a
+-- los clientes empatados (hay miles con la misma recencia), y el
+-- resultado cambiaba entre ejecuciones. CUME_DIST les da el mismo quintil.
 -- =====================================================================
 WITH corte AS (
     SELECT MAX(purchased_at)::DATE + 1 AS fecha_corte
@@ -27,11 +29,11 @@ rfm AS (
            recencia_dias,
            frecuencia,
            valor,
-           6 - NTILE(5) OVER (ORDER BY recencia_dias) AS r,   -- más reciente = 5
+           6 - GREATEST(1, CEIL(5 * CUME_DIST() OVER (ORDER BY recencia_dias)))::INT AS r,  -- más reciente = 5
            CASE WHEN frecuencia >= 3 THEN 5
                 WHEN frecuencia  = 2 THEN 4
                 ELSE 1 END                            AS f,
-           NTILE(5) OVER (ORDER BY valor)             AS m
+           GREATEST(1, CEIL(5 * CUME_DIST() OVER (ORDER BY valor)))::INT          AS m
     FROM base
 ),
 segmentos AS (
