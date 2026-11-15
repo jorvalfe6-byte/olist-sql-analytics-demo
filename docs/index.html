@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Olist · Análisis de e-commerce con SQL — Jorge Valencia</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%231d1e20%22/%3E%3Cpath d=%22M8 22h4V14H8zm6 0h4V8h-4zm6 0h4V17h-4z%22 fill=%22%2300918b%22/%3E%3C/svg%3E">
+<meta name="description" content="Demo de análisis de datos: 99 mil pedidos de un marketplace modelados en PostgreSQL y analizados con SQL.">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f3f0e8;     /* marfil de fondo */
+    --surface-1: #faf8f3;     /* superficie de tarjetas y gráficos */
+    --line:      #e2ddd1;     /* grilla y bordes */
+    --text-1:    #1d1e20;     /* grafito */
+    --text-2:    #55524c;
+    --text-3:    #858077;
+    --series-1:  #00918b;     /* turquesa (validado vs. #faf8f3) */
+    --series-2:  #b8632c;     /* cobre */
+    --wash-1:    rgba(0,145,139,.10);
+    --seq-0:#e6f3f1; --seq-1:#bfe2de; --seq-2:#8ccbc5; --seq-3:#4faea7; --seq-4:#12908a; --seq-5:#0b6b66;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-0: #141516;
+      --surface-1: #1b1c1e;
+      --line:      #2e3033;
+      --text-1:    #f1eee6;
+      --text-2:    #bdb8ad;
+      --text-3:    #8b877e;
+      --series-1:  #16a39a;   /* validado vs. #1b1c1e */
+      --series-2:  #cc7a40;
+      --wash-1:    rgba(22,163,154,.12);
+      --seq-0:#22302f; --seq-1:#1f4744; --seq-2:#1d625d; --seq-3:#1a7f78; --seq-4:#22a59c; --seq-5:#6fd0c8;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-1);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .num, td.n, .kpi b { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  a { color: inherit; text-decoration-color: var(--series-1); text-underline-offset: 3px; }
+
+  header.top { padding: 56px 0 28px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); margin: 0 0 14px; }
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-weight: 500; font-size: clamp(30px, 5vw, 50px); line-height: 1.08; letter-spacing: -.01em;
+    margin: 0 0 16px; max-width: 24ch;
+  }
+  h1 em { font-style: italic; color: var(--series-1); }
+  .lede { max-width: 62ch; color: var(--text-2); font-size: 17px; margin: 0 0 22px; }
+  .byline { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--text-3); }
+  .byline strong { color: var(--text-1); font-weight: 600; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px;
+          background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 32px 0 8px; }
+  .kpi { background: var(--surface-1); padding: 16px 18px; }
+  .kpi span { display: block; font-size: 12px; color: var(--text-3); }
+  .kpi b { display: block; font-size: 26px; font-weight: 600; letter-spacing: -.01em; margin-top: 2px; }
+  .kpi small { color: var(--text-2); font-size: 12px; }
+
+  section.block { padding: 44px 0 8px; }
+  h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 500;
+       font-size: 26px; margin: 0 0 4px; }
+  .block > .wrap > p.sub { color: var(--text-2); margin: 0 0 20px; max-width: 70ch; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+  .card { grid-column: span 12; background: var(--surface-1); border: 1px solid var(--line);
+          border-radius: 10px; padding: 20px 20px 14px; min-width: 0; }
+  .colstack { grid-column: span 12; display: grid; gap: 16px; align-content: start; min-width: 0; }
+  @media (min-width: 860px) { .span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-5 { grid-column: span 5; } }
+  .card h3 { font-size: 16px; font-weight: 600; margin: 0 0 2px; line-height: 1.35; }
+  .card .desc { font-size: 13px; color: var(--text-2); margin: 0 0 12px; }
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--text-2); margin: 0 0 8px; }
+  .legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .legend i.rect { width: 10px; height: 10px; border-radius: 2px; }
+  .legend i.ln { width: 16px; height: 2px; border-radius: 1px; }
+  .legend i.ln.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; }
+
+  .card footer { display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+                 border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; font-size: 12px; color: var(--text-3); }
+  details summary { cursor: pointer; color: var(--text-2); }
+  details[open] summary { margin-bottom: 8px; }
+  .tbl { max-height: 300px; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--text-3); font-weight: 500; position: sticky; top: 0; background: var(--surface-1); }
+  td.n, th.n { text-align: right; }
+
+  svg text { fill: var(--text-2); font-size: 11px; }
+  svg .axis text { fill: var(--text-3); }
+  svg .grid line { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+  svg .lbl { fill: var(--text-1); font-weight: 600; }
+  /* halo del color de fondo: el valor se lee aunque lo cruce la línea de referencia */
+  svg .val { paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
+  .hit { fill: transparent; cursor: default; }
+  .mark { transition: opacity .12s; }
+  .chart.hovering .mark:not(.on) { opacity: .45; }
+  .hit:focus { outline: none; }
+  .hit:focus-visible + .mark, .mark.on { opacity: 1; }
+
+  #tip { position: fixed; pointer-events: none; z-index: 10; min-width: 120px; max-width: 260px;
+         background: var(--surface-1); color: var(--text-1); border: 1px solid var(--line);
+         box-shadow: 0 6px 24px rgba(0,0,0,.12); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+         opacity: 0; transform: translateY(4px); transition: opacity .1s, transform .1s; }
+  #tip.show { opacity: 1; transform: none; }
+  #tip .t { color: var(--text-3); margin-bottom: 4px; }
+  #tip .r { display: flex; align-items: center; gap: 8px; }
+  #tip .r b { font-size: 14px; font-variant-numeric: tabular-nums; }
+  #tip .r i { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+  #tip .r span { color: var(--text-2); }
+
+  .stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 4px; }
+  .stat3 div { border-left: 2px solid var(--series-1); padding: 2px 0 2px 10px; }
+  .stat3 b { display: block; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat3 span { font-size: 12px; color: var(--text-2); }
+
+  .how ol { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 1px;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); background: var(--line);
+            border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .how li { background: var(--surface-1); padding: 16px 18px; font-size: 13px; color: var(--text-2); }
+  .how li::before { counter-increment: s; content: "0" counter(s); display: block; color: var(--series-1);
+                    font: 600 12px/1 ui-monospace, Menlo, monospace; margin-bottom: 8px; }
+  .how li b { display: block; color: var(--text-1); font-size: 14px; margin-bottom: 2px; }
+  code { font: 12px ui-monospace, Menlo, Consolas, monospace; background: var(--wash-1); padding: 1px 5px; border-radius: 4px; }
+
+  footer.end { margin: 56px 0 0; padding: 22px 0 40px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
+  footer.end p { margin: 0 0 6px; max-width: 80ch; }
+  .err { padding: 40px 0; color: var(--text-2); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Demo de análisis de datos · PostgreSQL + SQL</p>
+    <h1>Lo que dicen <em>99 mil pedidos</em> de un marketplace</h1>
+    <p class="lede">Tomé el dataset público de Olist, un marketplace brasileño, lo modelé en PostgreSQL y le hice las preguntas que le haría cualquier dueño de tienda online: cuánto vendo, quién vuelve, qué tanto me cuestan los retrasos y de dónde sale la plata.</p>
+    <div class="byline">
+      <span><strong>Jorge Valencia</strong> · automatizaciones y análisis de datos</span>
+      <span id="periodo"></span>
+      <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo">Código y consultas en GitHub</a>
+    </div>
+    <div class="kpis" id="kpis" aria-label="Indicadores principales"></div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="block">
+    <div class="wrap">
+      <h2>Ventas</h2>
+      <p class="sub">El negocio creció rápido durante 2017 y en 2018 se estabilizó. El pico de noviembre de 2017 es Black Friday.</p>
+      <div class="grid">
+        <article class="card">
+          <h3 id="t-mensual">GMV mensual: de R$ 120 mil a casi R$ 1 millón en un año</h3>
+          <p class="desc">Valor de la mercadería vendida por mes (sin flete), pedidos válidos. Ene 2017 – ago 2018.</p>
+          <div class="legend" id="lg-mensual"></div>
+          <div class="chart" id="c-mensual"></div>
+          <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-mensual"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/02_ventas_mensuales.sql">SQL ↗</a></footer>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <h2>Logística y satisfacción</h2>
+      <p class="sub">Los retrasos son pocos, pero son los que más castigan la calificación del cliente.</p>
+      <div class="grid">
+        <article class="card span-5">
+          <h3>Con 4 días de retraso, 2 de cada 3 reseñas son negativas</h3>
+          <p class="desc">% de reseñas de 1–2 estrellas según cuándo llegó el pedido frente a la fecha prometida.</p>
+          <div class="legend" id="lg-atraso"></div>
+          <div class="chart" id="c-atraso"></div>
+          <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-atraso"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/05_logistica_entregas.sql">SQL ↗</a></footer>
+        </article>
+        <article class="card span-7">
+          <h3>Los retrasos se concentran en el nordeste</h3>
+          <p class="desc">% de pedidos entregados después de la fecha prometida, por estado del cliente. La línea marca el promedio nacional.</p>
+          <div class="chart" id="c-estados"></div>
+          <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-estados"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/05_logistica_entregas.sql">SQL ↗</a></footer>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <h2>Clientes</h2>
+      <p class="sub">El punto débil del negocio: casi nadie vuelve a comprar.</p>
+      <div class="grid">
+        <article class="card span-6">
+          <h3>Menos del 1 % de cada cohorte vuelve en los meses siguientes</h3>
+          <p class="desc">Retención por mes de primera compra: % de clientes que compró de nuevo N meses después.</p>
+          <div class="chart" id="c-cohortes"></div>
+          <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-cohortes"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/03_cohortes_retencion.sql">SQL ↗</a></footer>
+        </article>
+        <article class="card span-6">
+          <h3>Un 15 % de clientes nuevos de alto valor genera casi un tercio del GMV</h3>
+          <p class="desc">Segmentación RFM (recencia, frecuencia, valor): peso de cada segmento en clientes y en ventas.</p>
+          <div class="legend" id="lg-rfm"></div>
+          <div class="chart" id="c-rfm"></div>
+          <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-rfm"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/04_rfm_segmentacion.sql">SQL ↗</a></footer>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <h2>Productos, vendedores y pagos</h2>
+      <p class="sub">Pocas categorías y pocos vendedores mueven la mayor parte del dinero.</p>
+      <div class="grid">
+        <article class="card span-7">
+          <h3>18 de 74 categorías hacen el 80 % de las ventas</h3>
+          <p class="desc">Top 15 categorías por GMV. El resto de la curva ABC está en la tabla.</p>
+          <div class="chart" id="c-categorias"></div>
+          <footer><details><summary>Ver tabla (74 categorías)</summary><div class="tbl" id="tb-categorias"></div></details>
+            <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/06_categorias_pareto.sql">SQL ↗</a></footer>
+        </article>
+        <div class="colstack span-5" id="col-der">
+          <article class="card">
+            <h3>Concentración de vendedores</h3>
+            <p class="desc" id="d-vend"></p>
+            <div class="stat3" id="s-vend"></div>
+            <footer><span></span><a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/07_vendedores_ranking.sql">SQL ↗</a></footer>
+          </article>
+          <article class="card">
+            <h3>La tarjeta de crédito mueve 8 de cada 10 reales</h3>
+            <p class="desc">% del monto pagado por medio de pago.</p>
+            <div class="chart" id="c-pagos"></div>
+            <footer><details><summary>Ver tabla</summary><div class="tbl" id="tb-pagos"></div></details>
+              <a href="https://github.com/jorvalfe6-byte/olist-sql-analytics-demo/blob/main/sql/analysis/08_pagos.sql">SQL ↗</a></footer>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block how">
+    <div class="wrap">
+      <h2>Cómo está hecho</h2>
+      <p class="sub">Todo el proceso se reconstruye con un comando (<code>./scripts/load.sh</code>) en unos 10 segundos.</p>
+      <ol>
+        <li><b>Staging</b>Los 8 CSV entran tal cual, como texto, con <code>\copy</code>. Nada falla por un formato raro.</li>
+        <li><b>Core</b>Modelo tipado con claves primarias, foráneas y <code>CHECK</code>. Cada carga queda registrada en una tabla de auditoría.</li>
+        <li><b>Validación</b>9 controles comparan conteos y montos con el dataset original: 0 filas rechazadas.</li>
+        <li><b>Mart</b>Vista materializada a nivel de pedido. Ítems y pagos se agregan antes del JOIN para no duplicar montos.</li>
+        <li><b>Análisis</b>Funciones de ventana, cohortes, RFM, curva ABC, <code>GROUPING SETS</code> y percentiles.</li>
+        <li><b>Publicación</b>Solo agregados salen a un JSON de 24 KB; esta página lo dibuja sin librerías externas.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="end">
+  <div class="wrap">
+    <p>Datos: <a href="https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce">Brazilian E-Commerce Public Dataset by Olist</a>, licencia CC BY-NC-SA 4.0. Los datos son reales y anonimizados por Olist. Esta página solo publica agregados, bajo la misma licencia.</p>
+    <p>Montos en reales brasileños (R$). Pedido válido = todo pedido no cancelado ni marcado como no disponible. <span id="gen"></span></p>
+  </div>
+</footer>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+// ---------- formato ----------
+const nf0 = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const brl = v => "R$ " + nf0.format(v);
+const brlC = v => v >= 1e6 ? "R$ " + nf1.format(v / 1e6) + " M" : v >= 1e3 ? "R$ " + nf0.format(v / 1e3) + " mil" : "R$ " + nf0.format(v);
+const pct = (v, d = 1) => (d === 2 ? nf2 : nf1).format(v) + " %";
+const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const mesTxt = s => { const [y, m] = s.split("-"); return MESES[+m - 1] + " " + y; };
+const mesCorto = s => { const [y, m] = s.split("-"); return MESES[+m - 1] + (m === "01" ? " " + y.slice(2) : ""); };
+const CAT = {
+  health_beauty:"Salud y belleza", watches_gifts:"Relojes y regalos", bed_bath_table:"Cama, mesa y baño",
+  sports_leisure:"Deportes y ocio", computers_accessories:"Accesorios de cómputo", furniture_decor:"Muebles y decoración",
+  housewares:"Hogar", cool_stuff:"Artículos curiosos", auto:"Automotor", garden_tools:"Jardinería",
+  toys:"Juguetes", baby:"Bebés", perfumery:"Perfumería", telephony:"Telefonía", office_furniture:"Muebles de oficina",
+  stationery:"Papelería", computers:"Computadores", pet_shop:"Mascotas", small_appliances:"Electrodomésticos pequeños",
+  musical_instruments:"Instrumentos musicales", sin_categoria:"Sin categoría", electronics:"Electrónica"
+};
+const catTxt = c => CAT[c] || c.replace(/_/g, " ");
+const PAGO = { credit_card:"Tarjeta de crédito", boleto:"Boleto bancario", voucher:"Voucher", debit_card:"Tarjeta débito", not_defined:"Sin definir" };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- utilidades DOM (los textos entran siempre con textContent) ----------
+const NS = "http://www.w3.org/2000/svg";
+function s(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(parent, x, y, str, attrs = {}) {
+  // fill va como style: la regla CSS "svg text" ganaría sobre el atributo
+  const { fill, ...rest } = attrs;
+  const t = s("text", { x, y, ...rest }, parent);
+  if (fill) t.style.fill = fill;
+  t.textContent = str; return t;
+}
+function h(tag, cls, str) { const e = document.createElement(tag); if (cls) e.className = cls; if (str != null) e.textContent = str; return e; }
+function svgRoot(el, w, hgt, label) {
+  el.textContent = "";
+  return s("svg", { viewBox: `0 0 ${w} ${hgt}`, role: "img", "aria-label": label }, el);
+}
+// barra horizontal: base cuadrada a la izquierda, extremo de datos redondeado 4px
+function barPath(x, y, w, hgt, r = 4) {
+  r = Math.min(r, w, hgt / 2);
+  if (w <= 0) return "";
+  return `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + hgt - r}Q${x + w},${y + hgt} ${x + w - r},${y + hgt}H${x}Z`;
+}
+function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+  return ([1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => n <= x)) * p; }
+
+// ---------- tooltip ----------
+const tip = document.getElementById("tip");
+function showTip(ev, title, rows) {
+  tip.textContent = "";
+  tip.appendChild(h("div", "t", title));
+  for (const r of rows) {
+    const row = h("div", "r");
+    if (r.color) { const i = h("i"); i.style.background = r.color; row.appendChild(i); }
+    row.appendChild(h("b", null, r.value));
+    if (r.name) row.appendChild(h("span", null, r.name));
+    tip.appendChild(row);
+  }
+  let x, y;
+  if (ev.clientX != null && ev.type !== "focus") { x = ev.clientX; y = ev.clientY; }
+  else { const b = ev.target.getBoundingClientRect(); x = b.left + b.width / 2; y = b.top; }
+  tip.classList.add("show");
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = x + 14, top = y - th - 10;
+  if (left + tw > innerWidth - 8) left = x - tw - 14;
+  if (top < 8) top = y + 16;
+  tip.style.left = Math.max(8, left) + "px"; tip.style.top = top + "px";
+}
+function hideTip() { tip.classList.remove("show"); }
+function bindHover(hit, mark, chartEl, fn) {
+  hit.setAttribute("tabindex", "0");
+  const on = ev => { chartEl.classList.add("hovering"); mark.classList.add("on"); fn(ev); };
+  const off = () => { chartEl.classList.remove("hovering"); mark.classList.remove("on"); hideTip(); };
+  hit.addEventListener("pointermove", on); hit.addEventListener("focus", on);
+  hit.addEventListener("pointerleave", off); hit.addEventListener("blur", off);
+}
+
+// ---------- tabla accesible ----------
+function table(el, cols, rows) {
+  const t = h("table"), thead = h("thead"), tr = h("tr");
+  cols.forEach(c => { const th = h("th", c.n ? "n" : null, c.t); th.scope = "col"; tr.appendChild(th); });
+  thead.appendChild(tr); t.appendChild(thead);
+  const tb = h("tbody");
+  rows.forEach(r => { const row = h("tr"); cols.forEach(c => row.appendChild(h("td", c.n ? "n" : null, c.f(r)))); tb.appendChild(row); });
+  t.appendChild(tb); el.textContent = ""; el.appendChild(t);
+}
+function legend(el, items) {
+  el.textContent = "";
+  for (const it of items) {
+    const sp = h("span"), i = h("i", it.type + (it.dash ? " dash" : ""));
+    i.style.background = it.color; i.style.color = it.color;
+    sp.appendChild(i); sp.appendChild(document.createTextNode(it.name)); el.appendChild(sp);
+  }
+}
+
+// ---------- gráfico de líneas con crosshair ----------
+function lineChart(el, data, series, opt) {
+  const W = el.clientWidth || 700, H = Math.round(Math.max(240, Math.min(340, W * .42)));
+  const m = { t: 14, r: 92, b: 26, l: 72 };
+  const svg = svgRoot(el, W, H, opt.label);
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ymax = niceMax(Math.max(...data.flatMap(d => series.map(sr => d[sr.key]))));
+  const X = i => m.l + (iw * i) / (data.length - 1), Y = v => m.t + ih - (ih * v) / ymax;
+  const g = s("g", { class: "grid" }, svg), ax = s("g", { class: "axis" }, svg);
+  for (let k = 0; k <= 4; k++) {
+    const v = (ymax * k) / 4, y = Y(v);
+    s("line", { x1: m.l, x2: m.l + iw, y1: y, y2: y }, g);
+    txt(ax, m.l - 8, y + 4, brlC(v), { "text-anchor": "end" });
+  }
+  const step = W < 420 ? 4 : W < 640 ? 3 : 2;
+  data.forEach((d, i) => { if (i % step === 0) txt(ax, X(i), H - 6, mesCorto(d.mes), { "text-anchor": "middle" }); });
+  // área tenue bajo la serie principal
+  const p0 = series[0];
+  s("path", { d: `M${X(0)},${Y(0)}` + data.map((d, i) => `L${X(i)},${Y(d[p0.key])}`).join("") + `L${X(data.length - 1)},${Y(0)}Z`, fill: css("--wash-1") }, svg);
+  series.forEach(sr => {
+    s("path", { d: data.map((d, i) => (i ? "L" : "M") + X(i) + "," + Y(d[sr.key])).join(""), fill: "none",
+                stroke: sr.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round",
+                ...(sr.dash ? { "stroke-dasharray": "5 4" } : {}) }, svg);
+  });
+  // etiquetas directas al final de cada línea (sin solaparse)
+  const last = data.length - 1;
+  const ends = series.map(sr => ({ sr, y: Y(data[last][sr.key]) })).sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 30) ends[k].y = ends[k - 1].y + 30;
+  ends.forEach(e => {
+    s("circle", { cx: X(last), cy: Y(data[last][e.sr.key]), r: 4, fill: e.sr.color, stroke: css("--surface-1"), "stroke-width": 2 }, svg);
+    txt(svg, X(last) + 10, e.y - 2, e.sr.short, { class: "lbl" });
+    txt(svg, X(last) + 10, e.y + 12, brlC(data[last][e.sr.key]));
+  });
+  // capa de hover: crosshair que se ajusta al mes más cercano
+  const cross = s("line", { y1: m.t, y2: m.t + ih, stroke: css("--text-3"), "stroke-width": 1, opacity: 0 }, svg);
+  const dots = series.map(sr => s("circle", { r: 4, fill: sr.color, stroke: css("--surface-1"), "stroke-width": 2, opacity: 0 }, svg));
+  const ov = s("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent", tabindex: 0 }, svg);
+  let cur = last;
+  const show = (i, ev) => {
+    cur = i; const d = data[i];
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("opacity", 1);
+    dots.forEach((c, k) => { c.setAttribute("cx", X(i)); c.setAttribute("cy", Y(d[series[k].key])); c.setAttribute("opacity", 1); });
+    const r = series.map(sr => ({ color: sr.color, value: brl(d[sr.key]), name: sr.name }));
+    r.push({ value: nf0.format(d.pedidos), name: "pedidos" });
+    showTip(ev, mesTxt(d.mes), r);
+  };
+  ov.addEventListener("pointermove", ev => {
+    const b = svg.getBoundingClientRect(), px = ((ev.clientX - b.left) / b.width) * W;
+    show(Math.max(0, Math.min(last, Math.round(((px - m.l) / iw) * last))), ev);
+  });
+  ov.addEventListener("focus", ev => show(cur, ev));
+  ov.addEventListener("keydown", ev => {
+    if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+      ev.preventDefault(); const i = Math.max(0, Math.min(last, cur + (ev.key === "ArrowRight" ? 1 : -1)));
+      const b = svg.getBoundingClientRect();
+      show(i, { clientX: b.left + (X(i) / W) * b.width, clientY: b.top + (m.t / H) * b.height + 20 });
+    }
+  });
+  const off = () => { cross.setAttribute("opacity", 0); dots.forEach(c => c.setAttribute("opacity", 0)); hideTip(); };
+  ov.addEventListener("pointerleave", off); ov.addEventListener("blur", off);
+}
+
+// ---------- barras horizontales (una o dos series) ----------
+function barsH(el, rows, opt) {
+  const W = el.clientWidth || 600;
+  const ser = opt.series, nS = ser.length;
+  const barH = Math.min(opt.barH || 16, 24), gap = 2, band = nS * barH + (nS - 1) * gap + (opt.bandPad || 10);
+  const labW = opt.labelW || Math.min(170, W * .36);
+  const m = { t: opt.refLabel ? 18 : 4, r: 56, b: 4, l: labW };
+  const H = m.t + rows.length * band + m.b;
+  const svg = svgRoot(el, W, H, opt.label);
+  const iw = W - m.l - m.r;
+  const max = opt.max || niceMax(Math.max(...rows.flatMap(r => ser.map(sr => r[sr.key]))));
+  const Xs = v => (iw * v) / max;
+  s("line", { x1: m.l, x2: m.l, y1: m.t - 2, y2: H - m.b, stroke: css("--line"), "stroke-width": 1 }, svg);
+  if (opt.ref != null) {
+    const rx = m.l + Xs(opt.ref);
+    s("line", { x1: rx, x2: rx, y1: m.t - 4, y2: H - m.b, stroke: css("--text-3"), "stroke-width": 1, "stroke-dasharray": "0" }, svg);
+    txt(svg, rx + 4, 11, opt.refLabel, { fill: css("--text-3") });
+  }
+  rows.forEach((r, i) => {
+    const y0 = m.t + i * band + (opt.bandPad || 10) / 2;
+    txt(svg, m.l - 10, y0 + (nS * barH + (nS - 1) * gap) / 2 + 4, opt.labelOf(r), { "text-anchor": "end", fill: css("--text-1") });
+    ser.forEach((sr, k) => {
+      const y = y0 + k * (barH + gap), w = Math.max(1, Xs(r[sr.key]));
+      const color = typeof sr.color === "function" ? sr.color(r) : sr.color;
+      const mark = s("path", { d: barPath(m.l, y, w, barH), fill: color, class: "mark" }, svg);
+      if (opt.showValues !== false) txt(svg, m.l + w + 6, y + barH / 2 + 4, sr.fmt(r[sr.key]), { class: k === 0 ? "lbl val" : "val" });
+      const hit = s("rect", { x: m.l - labW, y: y - gap / 2, width: W - m.r + labW, height: barH + gap, class: "hit" }, svg);
+      svg.insertBefore(hit, mark);
+      bindHover(hit, mark, el, ev => showTip(ev, opt.labelOf(r),
+        (opt.tipRows ? opt.tipRows(r) : ser.map(x => ({ color: typeof x.color === "function" ? x.color(r) : x.color, value: x.fmt(r[x.key]), name: x.name })))));
+    });
+  });
+}
+
+// ---------- mapa de calor de cohortes ----------
+function heatmap(el, rows, label) {
+  const cohorts = [...new Set(rows.map(r => r.cohorte))], months = [...new Set(rows.map(r => r.mes_n))].sort((a, b) => a - b);
+  const W = el.clientWidth || 520, m = { t: 22, r: 4, b: 30, l: 62 };
+  const cw = (W - m.l - m.r) / months.length, ch = 22, H = m.t + cohorts.length * ch + m.b;
+  const svg = svgRoot(el, W, H, label);
+  const max = Math.max(...rows.map(r => r.retencion_pct));
+  const steps = [0, 1, 2, 3, 4, 5].map(k => css("--seq-" + k));
+  const stepOf = v => v <= 0 ? 0 : Math.min(5, 1 + Math.floor((v / max) * 4.999));
+  months.forEach((n, j) => txt(svg, m.l + j * cw + cw / 2, 14, "Mes " + n, { "text-anchor": "middle", fill: css("--text-3") }));
+  cohorts.forEach((c, i) => {
+    txt(svg, m.l - 8, m.t + i * ch + ch / 2 + 4, mesTxt(c), { "text-anchor": "end" });
+    months.forEach((n, j) => {
+      const r = rows.find(x => x.cohorte === c && x.mes_n === n);
+      const st = stepOf(r.retencion_pct), x = m.l + j * cw, y = m.t + i * ch;
+      const mark = s("rect", { x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 2, fill: steps[st], class: "mark" }, svg);
+      if (cw >= 46) txt(svg, x + cw / 2, y + ch / 2 + 4, nf2.format(r.retencion_pct),
+        { "text-anchor": "middle", "font-size": 10, fill: st >= 4 ? css("--surface-1") : css("--text-1") });
+      const hit = s("rect", { x, y, width: cw, height: ch, class: "hit" }, svg);
+      svg.insertBefore(hit, mark);
+      bindHover(hit, mark, el, ev => showTip(ev, "Cohorte " + mesTxt(c) + " · mes " + n, [
+        { color: steps[Math.max(st, 4)], value: pct(r.retencion_pct, 2), name: "volvió a comprar" },
+        { value: nf0.format(r.activos) + " de " + nf0.format(r.clientes), name: "clientes" }]));
+    });
+  });
+  // escala
+  const ly = H - 12, lw = 22;
+  txt(svg, m.l, ly + 4, "0 %", { fill: css("--text-3") });
+  steps.forEach((c, k) => s("rect", { x: m.l + 26 + k * (lw + 2), y: ly - 5, width: lw, height: 8, rx: 2, fill: c }, svg));
+  txt(svg, m.l + 26 + 6 * (lw + 2) + 4, ly + 4, pct(max, 2), { fill: css("--text-3") });
+}
+
+// ---------- armado ----------
+function render(D) {
+  const k = D.kpis;
+  document.getElementById("periodo").textContent = "Período: " + k.desde.slice(0, 7) + " a " + k.hasta.slice(0, 7);
+  document.getElementById("gen").textContent = "Datos generados el " + D.generado + ".";
+  const kp = document.getElementById("kpis"); kp.textContent = "";
+  [["Pedidos válidos", nf0.format(k.pedidos), "pedidos"],
+   ["GMV total", brlC(k.gmv), "sin flete"],
+   ["Ticket promedio", brl(k.ticket_promedio), "por pedido"],
+   ["Clientes que recompran", pct(k.pct_recompra), "de " + nf0.format(k.clientes)],
+   ["Entregas tarde", pct(k.pct_tarde), nf1.format(k.dias_entrega) + " días en promedio"],
+   ["Calificación", nf2.format(k.review) + " / 5", "promedio de reseñas"]
+  ].forEach(([a, b, c]) => { const d = h("div", "kpi"); d.appendChild(h("span", null, a)); d.appendChild(h("b", null, b)); d.appendChild(h("small", null, c)); kp.appendChild(d); });
+
+  const S1 = css("--series-1"), S2 = css("--series-2");
+
+  // ventas mensuales
+  const mensualSeries = [
+    { key: "gmv", name: "GMV mensual", short: "GMV", color: S1 },
+    { key: "gmv_mm3", name: "Media móvil 3 meses", short: "Media 3 m", color: S2, dash: true }];
+  legend(document.getElementById("lg-mensual"), [
+    { type: "ln", color: S1, name: "GMV mensual" }, { type: "ln", color: S2, name: "Media móvil 3 meses", dash: true }]);
+  lineChart(document.getElementById("c-mensual"), D.mensual, mensualSeries, { label: "GMV mensual de enero 2017 a agosto 2018" });
+  table(document.getElementById("tb-mensual"), [
+    { t: "Mes", f: r => mesTxt(r.mes) }, { t: "Pedidos", n: 1, f: r => nf0.format(r.pedidos) },
+    { t: "GMV", n: 1, f: r => brl(r.gmv) }, { t: "Media 3 m", n: 1, f: r => brl(r.gmv_mm3) }], D.mensual);
+
+  // atraso vs reseñas
+  const tarde = r => r.orden >= 3;
+  legend(document.getElementById("lg-atraso"), [{ type: "rect", color: S1, name: "A tiempo o antes" }, { type: "rect", color: S2, name: "Con retraso" }]);
+  barsH(document.getElementById("c-atraso"), D.atraso, {
+    label: "Porcentaje de reseñas negativas según días de retraso", labelW: 110, barH: 20, max: 100,
+    labelOf: r => r.tramo,
+    series: [{ key: "pct_negativas", name: "reseñas de 1–2 estrellas", color: r => tarde(r) ? S2 : S1, fmt: v => pct(v) }],
+    tipRows: r => [{ color: tarde(r) ? S2 : S1, value: pct(r.pct_negativas), name: "reseñas negativas" },
+                   { value: nf2.format(r.review), name: "calificación promedio" }, { value: nf0.format(r.pedidos), name: "pedidos" }]
+  });
+  table(document.getElementById("tb-atraso"), [
+    { t: "Llegada", f: r => r.tramo }, { t: "Pedidos", n: 1, f: r => nf0.format(r.pedidos) },
+    { t: "Calificación", n: 1, f: r => nf2.format(r.review) }, { t: "% negativas", n: 1, f: r => pct(r.pct_negativas) }], D.atraso);
+
+  // estados
+  barsH(document.getElementById("c-estados"), D.estados, {
+    label: "Porcentaje de entregas tarde por estado", labelW: 40, barH: 11, bandPad: 4,
+    ref: k.pct_tarde, refLabel: "Brasil " + pct(k.pct_tarde),
+    labelOf: r => r.estado, showValues: true,
+    series: [{ key: "pct_tarde", name: "entregas tarde", color: S1, fmt: v => pct(v) }],
+    tipRows: r => [{ color: S1, value: pct(r.pct_tarde), name: "entregas tarde" },
+                   { value: nf1.format(r.dias_reales) + " días", name: "entrega real promedio" },
+                   { value: nf1.format(r.dias_prometidos) + " días", name: "plazo prometido" },
+                   { value: nf2.format(r.review), name: "calificación" }, { value: nf0.format(r.entregas), name: "entregas" }]
+  });
+  table(document.getElementById("tb-estados"), [
+    { t: "Estado", f: r => r.estado }, { t: "Entregas", n: 1, f: r => nf0.format(r.entregas) },
+    { t: "Días reales", n: 1, f: r => nf1.format(r.dias_reales) }, { t: "Días prometidos", n: 1, f: r => nf1.format(r.dias_prometidos) },
+    { t: "% tarde", n: 1, f: r => pct(r.pct_tarde) }, { t: "Calificación", n: 1, f: r => nf2.format(r.review) }], D.estados);
+
+  // cohortes
+  heatmap(document.getElementById("c-cohortes"), D.cohortes, "Retención de clientes por cohorte, meses 1 a 6");
+  const coh = [...new Set(D.cohortes.map(r => r.cohorte))];
+  table(document.getElementById("tb-cohortes"),
+    [{ t: "Cohorte", f: r => mesTxt(r.c) }, { t: "Clientes", n: 1, f: r => nf0.format(r.n) },
+     ...[1, 2, 3, 4, 5, 6].map(j => ({ t: "Mes " + j, n: 1, f: r => pct(r.v[j], 2) }))],
+    coh.map(c => { const rs = D.cohortes.filter(r => r.cohorte === c), v = {}; rs.forEach(r => v[r.mes_n] = r.retencion_pct); return { c, n: rs[0].clientes, v }; }));
+
+  // RFM
+  legend(document.getElementById("lg-rfm"), [{ type: "rect", color: S1, name: "% de clientes" }, { type: "rect", color: S2, name: "% del GMV" }]);
+  barsH(document.getElementById("c-rfm"), D.rfm, {
+    label: "Peso de cada segmento RFM en clientes y en GMV", labelW: 150, barH: 10, bandPad: 10,
+    labelOf: r => r.segmento,
+    series: [{ key: "pct_clientes", name: "de los clientes", color: S1, fmt: v => pct(v) },
+             { key: "pct_gmv", name: "del GMV", color: S2, fmt: v => pct(v) }],
+    tipRows: r => [{ color: S1, value: pct(r.pct_clientes), name: "de los clientes (" + nf0.format(r.clientes) + ")" },
+                   { color: S2, value: pct(r.pct_gmv), name: "del GMV" },
+                   { value: brl(r.valor_prom), name: "gasto promedio" }, { value: nf0.format(r.recencia_dias) + " días", name: "desde la última compra" }]
+  });
+  table(document.getElementById("tb-rfm"), [
+    { t: "Segmento", f: r => r.segmento }, { t: "Clientes", n: 1, f: r => nf0.format(r.clientes) },
+    { t: "% clientes", n: 1, f: r => pct(r.pct_clientes) }, { t: "% GMV", n: 1, f: r => pct(r.pct_gmv) },
+    { t: "Gasto prom.", n: 1, f: r => brl(r.valor_prom) }, { t: "Recencia (días)", n: 1, f: r => nf0.format(r.recencia_dias) }], D.rfm);
+
+  // categorías
+  const top = D.categorias.slice(0, 15);
+  barsH(document.getElementById("c-categorias"), top, {
+    label: "Top 15 categorías por GMV", labelW: 150, barH: 14, bandPad: 8,
+    labelOf: r => catTxt(r.category),
+    series: [{ key: "gmv", name: "GMV", color: S1, fmt: v => brlC(v) }],
+    tipRows: r => [{ color: S1, value: brl(r.gmv), name: "GMV" }, { value: pct(r.pct_gmv, 2), name: "del total" },
+                   { value: pct(r.pct_acumulado), name: "acumulado · clase " + r.clase_abc }, { value: nf2.format(r.review), name: "calificación" }]
+  });
+  table(document.getElementById("tb-categorias"), [
+    { t: "#", n: 1, f: r => r.ranking }, { t: "Categoría", f: r => catTxt(r.category) }, { t: "GMV", n: 1, f: r => brl(r.gmv) },
+    { t: "% total", n: 1, f: r => pct(r.pct_gmv, 2) }, { t: "% acumulado", n: 1, f: r => pct(r.pct_acumulado) }, { t: "ABC", f: r => r.clase_abc }], D.categorias);
+  const nA = D.categorias.filter(r => r.clase_abc === "A").length;
+  document.querySelector("#c-categorias").closest(".card").querySelector("h3").textContent =
+    nA + " de " + D.categorias.length + " categorías hacen el 80 % de las ventas";
+
+  // vendedores
+  const v = D.vendedores;
+  document.getElementById("d-vend").textContent = "Participación en el GMV de los vendedores más grandes, sobre " + nf0.format(v.vendedores) + " vendedores activos.";
+  const sv = document.getElementById("s-vend"); sv.textContent = "";
+  [[v.pct_top1, "top 1 %"], [v.pct_top10, "top 10 %"], [v.pct_top20, "top 20 %"]].forEach(([a, b]) => {
+    const d = h("div"); d.appendChild(h("b", null, pct(a))); d.appendChild(h("span", null, "del GMV lo vende el " + b)); sv.appendChild(d); });
+
+  // pagos
+  barsH(document.getElementById("c-pagos"), D.pagos, {
+    label: "Participación de cada medio de pago en el monto", labelW: 130, barH: 16, max: 100,
+    labelOf: r => PAGO[r.medio] || r.medio,
+    series: [{ key: "pct_monto", name: "del monto", color: S1, fmt: v => pct(v) }],
+    tipRows: r => [{ color: S1, value: pct(r.pct_monto), name: "del monto pagado" },
+                   { value: nf0.format(r.pedidos), name: "pedidos" }, { value: brl(r.monto_prom), name: "pago promedio" }]
+  });
+  table(document.getElementById("tb-pagos"), [
+    { t: "Medio", f: r => PAGO[r.medio] || r.medio }, { t: "Pedidos", n: 1, f: r => nf0.format(r.pedidos) },
+    { t: "% monto", n: 1, f: r => pct(r.pct_monto) }, { t: "Pago prom.", n: 1, f: r => brl(r.monto_prom) }], D.pagos);
+}
+
+let DATA = null, rt;
+fetch("data/dashboard.json")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d => { DATA = d; render(d); })
+  .catch(() => { document.getElementById("main").replaceChildren(h("p", "wrap err",
+    "No se pudieron cargar los datos. Si abriste el archivo directamente, sírvelo con un servidor local: python3 -m http.server --directory docs")); });
+// solo se redibuja si cambia el ancho (en móvil la barra del navegador cambia el alto al hacer scroll)
+let lastW = innerWidth;
+addEventListener("resize", () => {
+  if (innerWidth === lastW) return;
+  lastW = innerWidth; clearTimeout(rt); rt = setTimeout(() => DATA && render(DATA), 150);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => DATA && render(DATA));
+</script>
+</body>
+</html>
