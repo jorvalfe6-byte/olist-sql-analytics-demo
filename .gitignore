@@ -1,6 +1,6 @@
-data/
+# CSV originales de Olist: no se versionan (licencia y tamaño)
+/data/
 *.csv
-*.parquet
 *.duckdb
 .env
 .DS_Store
