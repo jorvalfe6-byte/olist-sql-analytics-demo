@@ -9,7 +9,8 @@ mkdir -p "$(dirname "$OUT")"
 
 psql -X -q -At -v ON_ERROR_STOP=1 > "$OUT" <<'SQL'
 SELECT json_build_object(
-    'generado',    to_char(now(), 'YYYY-MM-DD'),
+    -- fecha de la carga, no de la exportación: exportar dos veces da el mismo archivo
+    'generado',    (SELECT to_char(MAX(loaded_at), 'YYYY-MM-DD') FROM audit.load_log),
     'kpis',        (SELECT row_to_json(k) FROM mart.dash_kpis k),
     'mensual',     (SELECT json_agg(m ORDER BY mes)               FROM mart.dash_mensual m),
     'cohortes',    (SELECT json_agg(c ORDER BY cohorte, mes_n)    FROM mart.dash_cohortes c),

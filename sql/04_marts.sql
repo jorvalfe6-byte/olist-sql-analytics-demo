@@ -9,6 +9,8 @@
 -- =====================================================================
 \set ON_ERROR_STOP on
 
+SET client_min_messages = warning;  -- silencia los avisos de DROP ... IF EXISTS
+
 DROP MATERIALIZED VIEW IF EXISTS mart.fact_order CASCADE;
 DROP VIEW IF EXISTS mart.fact_item CASCADE;
 
@@ -31,8 +33,9 @@ pagos_por_pedido AS (
     SELECT order_id,
            SUM(payment_value)    AS paid_value,
            MAX(installments)     AS max_installments,
-           -- medio principal = el de mayor monto
-           (ARRAY_AGG(payment_type ORDER BY payment_value DESC))[1] AS main_payment_type
+           -- medio principal = el de mayor monto; si empatan (99 pedidos),
+           -- gana el que se registró primero, para que el resultado no varíe
+           (ARRAY_AGG(payment_type ORDER BY payment_value DESC, payment_sequential))[1] AS main_payment_type
     FROM core.order_payment
     GROUP BY order_id
 ),

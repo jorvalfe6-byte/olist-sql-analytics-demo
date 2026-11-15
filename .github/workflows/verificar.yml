@@ -1,0 +1,55 @@
+# Reconstruye la base desde cero y comprueba que el dashboard publicado
+# sale de este código: controles de calidad en OK y JSON idéntico.
+name: Verificar carga
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  carga:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: olist
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: olist
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descargar CSV
+        run: ./scripts/download_data.sh
+
+      - name: Cargar y validar (falla si algún control dice REVISAR)
+        run: ./scripts/load.sh
+
+      - name: Correr las consultas de análisis
+        run: |
+          for f in sql/analysis/0[1-8]*.sql; do
+            echo "→ $f"
+            psql -X -q -v ON_ERROR_STOP=1 -f "$f" > /dev/null
+          done
+
+      - name: Comparar el JSON exportado con el del repositorio
+        run: |
+          cp docs/data/dashboard.json /tmp/publicado.json
+          ./scripts/export_dashboard.sh
+          # 'generado' es la fecha de la carga: se ignora en la comparación
+          sin_fecha() { sed -E 's/"generado" : "[^"]*"//' "$1"; }
+          diff <(sin_fecha /tmp/publicado.json) <(sin_fecha docs/data/dashboard.json)

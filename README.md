@@ -13,7 +13,7 @@ El dashboard es una sola página estática. Lee un JSON de 24 KB con resultados 
 - **Los retrasos son pocos, pero salen caros.** El 6,8 % de las entregas llegó después de la fecha prometida. Cuando el pedido llega a tiempo, el 10,1 % de las reseñas es negativa (1 o 2 estrellas). Con 4 a 7 días de retraso sube al 67,7 %, y con 8 días o más, al 79,3 %.
 - **El nordeste es donde más se falla.** Alagoas tiene 21,4 % de entregas tarde y Maranhão 17,4 %. São Paulo, que concentra 40.494 de las 96.470 entregas, está en 4,5 %.
 - **Las ventas están concentradas.** 18 de 74 categorías hacen el 80 % del GMV, y el 10 % de los vendedores vende el 67,5 %.
-- **La tarjeta de crédito mueve el 78,5 % del dinero.** Y entre más cuotas, más alto el ticket: R$ 96 promedio de contado contra R$ 332 en 7 cuotas o más.
+- **La tarjeta de crédito mueve el 78,5 % del dinero.** Y entre más cuotas, más alto el pago: R$ 96 en promedio por pago de contado contra R$ 332 en 7 cuotas o más.
 
 ## Cómo está armado
 
@@ -85,7 +85,7 @@ Cada archivo de `sql/analysis/` se puede correr por separado, y en el encabezado
 | `01_kpis_generales.sql` | Resumen ejecutivo | `PERCENTILE_CONT`, `FILTER`, ventana para contar recompras |
 | `02_ventas_mensuales.sql` | Tendencia mensual | Calendario con `generate_series`, `LAG` para MoM y YoY, acumulado anual, media móvil |
 | `03_cohortes_retencion.sql` | ¿Vuelven los clientes? | Cohortes por mes de primera compra |
-| `04_rfm_segmentacion.sql` | ¿Qué clientes valen más? | RFM con `NTILE` y reglas fijas donde los quintiles no sirven |
+| `04_rfm_segmentacion.sql` | ¿Qué clientes valen más? | RFM con quintiles por `CUME_DIST` (deterministas ante empates) y reglas fijas donde los quintiles no sirven |
 | `05_logistica_entregas.sql` | ¿Dónde fallan las entregas y qué cuesta? | `GROUPING SETS` para el total nacional, percentil 90 |
 | `06_categorias_pareto.sql` | ¿Qué categorías importan? | Curva ABC con suma acumulada |
 | `07_vendedores_ranking.sql` | Mejores vendedores por estado | Top-N por grupo con `ROW_NUMBER`, `PERCENT_RANK` |
@@ -105,7 +105,7 @@ Cada archivo de `sql/analysis/` se puede correr por separado, y en el encabezado
 
 Necesitas PostgreSQL 14 o más reciente y `psql`.
 
-1. Descarga el dataset de [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) y descomprime los CSV en `data/`.
+1. Descarga el dataset de [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) y descomprime los CSV en `data/`. Si no tienes cuenta en Kaggle, `./scripts/download_data.sh` baja los mismos 8 archivos desde el repositorio público de Olist en GitHub.
 2. Crea la base y carga todo:
 
 ```bash
@@ -115,7 +115,9 @@ export PGDATABASE=olist          # más PGHOST / PGUSER si hace falta
 ./scripts/export_dashboard.sh    # regenera docs/data/dashboard.json
 ```
 
-En mi máquina la carga completa tarda unos 8 segundos. Al final imprime los controles de calidad, y todos deben decir `OK`.
+En mi máquina la carga completa tarda unos 8 segundos. Al final imprime los controles de calidad, y todos deben decir `OK`: si alguno dice `REVISAR`, el script termina con error.
+
+Cada push corre esta misma carga en GitHub Actions y compara el JSON exportado con el que está en el repositorio.
 
 3. Para ver el dashboard en local:
 
@@ -134,6 +136,7 @@ sql/
   05_dashboard_views.sql   vistas que alimentan el dashboard
   analysis/                consultas de análisis, una por pregunta
 scripts/
+  download_data.sh         baja los CSV desde el repositorio público de Olist
   load.sh                  carga completa de punta a punta
   export_dashboard.sh      exporta los agregados a JSON
 docs/
