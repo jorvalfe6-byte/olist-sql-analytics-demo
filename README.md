@@ -6,6 +6,8 @@ Tomé el dataset público de Olist, un marketplace brasileño con 99.441 pedidos
 
 El dashboard es una sola página estática. Lee un JSON de 24 KB con resultados ya agregados y dibuja los gráficos sin librerías externas.
 
+**Informe de Power BI:** el mismo análisis en un informe de 3 páginas, en [`powerbi/`](powerbi/) ([más abajo](#informe-de-power-bi)).
+
 ## Lo que encontré
 
 - **El negocio creció rápido y después se estabilizó.** El GMV mensual pasó de R$ 120 mil en enero de 2017 a R$ 1,0 millón en noviembre del mismo año (Black Friday). En 2018 se movió entre R$ 838 mil y R$ 994 mil por mes.
@@ -101,6 +103,28 @@ Cada archivo de `sql/analysis/` se puede correr por separado, y en el encabezado
 - **Pedido válido** es todo pedido que no esté cancelado ni marcado como no disponible. Quedan 98.207.
 - **Lo que no se cargó:** la tabla de geolocalización (coordenadas por código postal). Para los análisis por estado no hace falta, porque clientes y vendedores ya traen el estado y la ciudad.
 
+## Informe de Power BI
+
+Además del dashboard web, el repo trae un informe de Power BI en `powerbi/` con el mismo análisis, para filtrarlo por año y región sin tocar SQL.
+
+![Informe de Power BI, página Resumen](docs/img/powerbi-resumen.jpg)
+
+![Informe de Power BI, página Logística](docs/img/powerbi-logistica.jpg)
+
+![Informe de Power BI, página Categorías y pagos](docs/img/powerbi-categorias.jpg)
+
+| Página | Qué responde |
+|---|---|
+| Resumen | Pedidos, GMV, ticket promedio, clientes y % de recurrentes; GMV por mes y por estado |
+| Logística | % de entregas tarde y días de entrega por estado; reseñas negativas según los días de retraso |
+| Categorías y pagos | Pareto de categorías (GMV, % y % acumulado), GMV por medio de pago y ticket según cuotas |
+
+**Cómo está hecho.** `sql/06_powerbi_views.sql` arma un esquema `powerbi` en estrella encima de los marts: dos tablas de hechos (`fact_pedido`, un pedido por fila, y `fact_item`, un ítem por fila) y tres dimensiones (calendario continuo, estado con su región y categoría). `scripts/export_powerbi.sh` guarda cada vista como CSV en `powerbi/data/`, y el informe lee esos CSV. Por eso se abre sin PostgreSQL.
+
+El proyecto está en formato PBIP: el modelo en TMDL y el informe en PBIR, todo texto, así que los cambios se ven en un diff como cualquier otro archivo del repo. Las medidas usan las mismas definiciones del resto del proyecto (pedido válido, GMV sin flete, cliente = `customer_unique_id`). Las validé contra las consultas SQL: 94.990 clientes, 3,0 % recurrentes, 6,8 % de entregas tarde, 18 de 74 categorías hacen el 80 % del GMV, y las reseñas negativas suben de 10,1 % a tiempo a 79,3 % con 8 días o más de retraso.
+
+**Para abrirlo** necesitas Power BI Desktop (gratis, solo Windows). Abre `powerbi/Olist.pbip`. El parámetro `DataPath` apunta a la carpeta `powerbi/data/` de este repo en GitHub, así que basta con actualizar. Si prefieres leer los CSV de tu copia local, cambia `DataPath` en Transformar datos → Editar parámetros por la ruta de tu carpeta `powerbi\data\` (con la barra al final).
+
 ## Cómo correrlo
 
 Necesitas PostgreSQL 14 o más reciente y `psql`.
@@ -113,6 +137,7 @@ createdb olist
 export PGDATABASE=olist          # más PGHOST / PGUSER si hace falta
 ./scripts/load.sh                # esquema, carga, transformación, vistas y controles
 ./scripts/export_dashboard.sh    # regenera docs/data/dashboard.json
+./scripts/export_powerbi.sh      # regenera los CSV de powerbi/data/
 ```
 
 En mi máquina la carga completa tarda unos 8 segundos. Al final imprime los controles de calidad, y todos deben decir `OK`: si alguno dice `REVISAR`, el script termina con error.
@@ -134,11 +159,18 @@ sql/
   03_transform.sql         staging → core, auditoría e índices
   04_marts.sql             fact_order y fact_item
   05_dashboard_views.sql   vistas que alimentan el dashboard
+  06_powerbi_views.sql     modelo en estrella para Power BI (esquema powerbi)
   analysis/                consultas de análisis, una por pregunta
 scripts/
   download_data.sh         baja los CSV desde el repositorio público de Olist
   load.sh                  carga completa de punta a punta
   export_dashboard.sh      exporta los agregados a JSON
+  export_powerbi.sh        exporta el esquema powerbi a CSV
+powerbi/
+  Olist.pbip               proyecto de Power BI (abrir con Power BI Desktop)
+  Olist.SemanticModel/     modelo: tablas, relaciones y medidas DAX (TMDL)
+  Olist.Report/            páginas y visuales (PBIR)
+  data/                    CSV que lee el informe
 docs/
   index.html               dashboard (GitHub Pages)
   data/dashboard.json      resultados agregados
@@ -147,7 +179,7 @@ data/                      CSV originales (no se suben al repo)
 
 ## Licencias
 
-- **Datos:** [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), licencia [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Los CSV originales no están en el repositorio. Los agregados de `docs/data/` se publican bajo la misma licencia.
+- **Datos:** [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), licencia [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Los CSV originales no están en el repositorio. Los agregados de `docs/data/` y los CSV derivados de `powerbi/data/` (un pedido o un ítem por fila, con los mismos identificadores anónimos del dataset) se publican bajo la misma licencia, con atribución a Olist.
 - **Código** (SQL, scripts y página): MIT, ver [LICENSE](LICENSE).
 
 ---

@@ -1,0 +1,294 @@
+/// Grano: 1 fila por pedido (mart.fact_order).
+table Pedidos
+	lineageTag: 7888e2c8-280a-821d-7dd2-1bea8515fc9c
+
+	/// Pedidos válidos: excluye cancelados y no disponibles.
+	measure 'Pedidos válidos' = CALCULATE(COUNTROWS(Pedidos), Pedidos[es_valido] = 1)
+		formatString: #,0
+		lineageTag: 44e09196-6fe5-5e1f-8b8f-b58e08435424
+
+	/// Suma del precio de los ítems de pedidos válidos, sin flete.
+	measure GMV = CALCULATE(SUM(Pedidos[valor_mercancia]), Pedidos[es_valido] = 1)
+		formatString: "R$ "#,0
+		lineageTag: b0e44de8-54a1-d947-a53f-6121da940406
+
+	measure 'Ticket promedio' = DIVIDE([GMV], [Pedidos válidos])
+		formatString: "R$ "#,0.00
+		lineageTag: b2fca315-41fc-d3c7-e97a-efe787816e26
+
+	/// Ticket promedio sin el único pedido válido que no tiene pago registrado.
+	measure 'Ticket promedio con pago' = CALCULATE([Ticket promedio], KEEPFILTERS(Pedidos[Tramo de cuotas] <> "Sin pago"))
+		formatString: "R$ "#,0.00
+		lineageTag: cc75ec7c-384d-f1bc-5281-3a5ff7d9c4cc
+
+	/// GMV solo de enero 2017 a agosto 2018: 2016 trae pedidos de prueba y septiembre 2018 viene cortado.
+	measure 'GMV (meses completos)' = IF(MIN(Calendario[mes_completo]) = 1, [GMV])
+		formatString: "R$ "#,0
+		lineageTag: 6d6974f6-767f-d2b9-09d2-b67cf9c60936
+
+	/// Personas distintas (customer_unique_id) con al menos un pedido válido.
+	measure Clientes = CALCULATE(DISTINCTCOUNT(Pedidos[cliente_id]), Pedidos[es_valido] = 1)
+		formatString: #,0
+		lineageTag: 02af7ef1-114a-c50a-03e5-4a33052fe24f
+
+	/// Clientes con más de un pedido válido sobre el total de clientes.
+	measure '% clientes recurrentes' = ```
+			VAR clientes = CALCULATETABLE(VALUES(Pedidos[cliente_id]), Pedidos[es_valido] = 1)
+			VAR recurrentes =
+			    COUNTROWS(
+			        FILTER(clientes, CALCULATE(COUNTROWS(Pedidos), Pedidos[es_valido] = 1) > 1)
+			    )
+			RETURN DIVIDE(recurrentes, COUNTROWS(clientes))
+			```
+		formatString: 0.0%
+		lineageTag: c3dac641-23f8-8d41-09bd-29eb0887d607
+
+	measure 'GMV var. % año anterior' = ```
+			VAR actual = [GMV]
+			VAR anterior = CALCULATE([GMV], SAMEPERIODLASTYEAR(Calendario[Fecha]))
+			RETURN DIVIDE(actual - anterior, anterior)
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: 3ba6f6d9-ad69-a9e2-09bf-76d15dcb7d10
+
+	measure Entregas = CALCULATE(COUNTROWS(Pedidos), Pedidos[es_valido] = 1, Pedidos[entregado] = 1)
+		formatString: #,0
+		displayFolder: Logística
+		lineageTag: 1051457a-7b64-403d-94a9-8a28ec967395
+
+	/// Entregas que llegaron después de la fecha prometida.
+	measure '% entregas tarde' = CALCULATE(AVERAGE(Pedidos[tarde]), Pedidos[es_valido] = 1, Pedidos[entregado] = 1)
+		formatString: 0.0%
+		displayFolder: Logística
+		lineageTag: e8402565-0b10-a98f-1b64-6a45006ce344
+
+	measure 'Días de entrega promedio' = CALCULATE(AVERAGE(Pedidos[dias_entrega]), Pedidos[es_valido] = 1, Pedidos[entregado] = 1)
+		formatString: 0.0
+		displayFolder: Logística
+		lineageTag: 2cc74810-18f3-72b6-2db0-2ef3ad91ff95
+
+	measure 'Reseña promedio' = CALCULATE(AVERAGE(Pedidos[resena]), Pedidos[es_valido] = 1)
+		formatString: 0.00
+		displayFolder: Satisfacción
+		lineageTag: 1bb11ad8-2bd8-b83d-3224-2372d527ba82
+
+	/// Reseñas de 1 o 2 estrellas sobre entregas con reseña.
+	measure '% reseñas negativas' = ```
+			VAR conResena =
+			    CALCULATE(COUNTROWS(Pedidos), Pedidos[es_valido] = 1, Pedidos[entregado] = 1, NOT ISBLANK(Pedidos[resena]))
+			VAR negativas =
+			    CALCULATE(
+			        COUNTROWS(Pedidos),
+			        Pedidos[es_valido] = 1, Pedidos[entregado] = 1, NOT ISBLANK(Pedidos[resena]), Pedidos[resena] <= 2
+			    )
+			RETURN DIVIDE(negativas, conResena)
+			```
+		formatString: 0.0%
+		displayFolder: Satisfacción
+		lineageTag: 8eaf8e83-b220-7ce9-854a-2c42021b52fd
+
+	column pedido_id
+		dataType: string
+		isHidden
+		lineageTag: 06003294-7b05-dfe6-ab82-5f4771bc9fde
+		summarizeBy: none
+		sourceColumn: pedido_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column cliente_id
+		dataType: string
+		isHidden
+		lineageTag: 8fb90c13-13ca-8edd-c2ec-6d0d34c8248a
+		summarizeBy: none
+		sourceColumn: cliente_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column fecha_compra
+		dataType: dateTime
+		isHidden
+		formatString: yyyy-mm-dd
+		lineageTag: 9bf6e911-7c89-ec3d-2a90-798d6e2d6487
+		summarizeBy: none
+		sourceColumn: fecha_compra
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column estado_cliente
+		dataType: string
+		isHidden
+		lineageTag: 1fc26e25-3a27-63b5-2676-c7aaf1175fc1
+		summarizeBy: none
+		sourceColumn: estado_cliente
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estado del pedido'
+		dataType: string
+		lineageTag: a895f1dd-36c6-7637-e199-ce605d1dbc19
+		summarizeBy: none
+		sourceColumn: estado_pedido
+
+		annotation SummarizationSetBy = Automatic
+
+	column es_valido
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 9e7f6c0a-76e7-1c22-9833-4621e290744e
+		summarizeBy: none
+		sourceColumn: es_valido
+
+		annotation SummarizationSetBy = Automatic
+
+	column items
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2754aee8-5986-4947-42ab-00f028a3b845
+		summarizeBy: none
+		sourceColumn: items
+
+		annotation SummarizationSetBy = Automatic
+
+	column valor_mercancia
+		dataType: decimal
+		isHidden
+		formatString: #,0.00
+		lineageTag: 21e9681c-0a0c-a626-2505-fc167fab875b
+		summarizeBy: none
+		sourceColumn: valor_mercancia
+
+		annotation SummarizationSetBy = Automatic
+
+	column flete
+		dataType: decimal
+		isHidden
+		formatString: #,0.00
+		lineageTag: 8f4b3421-23ff-f4e6-c494-61d58b834484
+		summarizeBy: none
+		sourceColumn: flete
+
+		annotation SummarizationSetBy = Automatic
+
+	column valor_pagado
+		dataType: decimal
+		isHidden
+		formatString: #,0.00
+		lineageTag: e061253c-53fb-b0da-eaef-3fd80ed765aa
+		summarizeBy: none
+		sourceColumn: valor_pagado
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Medio de pago'
+		dataType: string
+		lineageTag: 4a396b9c-5ad2-2d92-54c7-b1ccfc4e2644
+		summarizeBy: none
+		sourceColumn: medio_pago
+
+		annotation SummarizationSetBy = Automatic
+
+	column Cuotas
+		dataType: int64
+		formatString: 0
+		lineageTag: a37539d2-1a79-ea32-bec1-510f49ef27f0
+		summarizeBy: none
+		sourceColumn: cuotas
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Tramo de cuotas'
+		dataType: string
+		lineageTag: ba5c2851-d2f7-ff26-959a-229811d3f7aa
+		summarizeBy: none
+		sourceColumn: tramo_cuotas
+
+		annotation SummarizationSetBy = Automatic
+
+	column dias_entrega
+		dataType: double
+		isHidden
+		formatString: #,0.0
+		lineageTag: ca0dea37-1156-628c-4abe-ff9cd3649315
+		summarizeBy: none
+		sourceColumn: dias_entrega
+
+		annotation SummarizationSetBy = Automatic
+
+	column dias_prometidos
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: c4337c76-6b26-df19-aa5a-dfdbeb651161
+		summarizeBy: none
+		sourceColumn: dias_prometidos
+
+		annotation SummarizationSetBy = Automatic
+
+	column entregado
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 1b679fd1-464f-1162-b8f4-26e4b62db6cd
+		summarizeBy: none
+		sourceColumn: entregado
+
+		annotation SummarizationSetBy = Automatic
+
+	column tarde
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8a31f749-9d20-578f-67cb-8ae5aa292a14
+		summarizeBy: none
+		sourceColumn: tarde
+
+		annotation SummarizationSetBy = Automatic
+
+	column dias_atraso
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ed313340-997b-f1f7-d512-2ec4e5c8920b
+		summarizeBy: none
+		sourceColumn: dias_atraso
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Tramo de atraso'
+		dataType: string
+		lineageTag: 201a63a8-2fd1-fd95-1f9b-bda827823187
+		summarizeBy: none
+		sourceColumn: tramo_atraso
+
+		annotation SummarizationSetBy = Automatic
+
+	column resena
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 1145de79-3172-1ef9-567b-9a1db6db2aad
+		summarizeBy: none
+		sourceColumn: resena
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Pedidos = m
+		mode: import
+		source =
+				let
+				    Archivo = "fact_pedido.csv",
+				    Binario = if Text.StartsWith(DataPath, "http")
+				        then Web.Contents(DataPath, [RelativePath = Archivo])
+				        else File.Contents(DataPath & Archivo),
+				    Fuente = Csv.Document(Binario, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Encabezados = Table.PromoteHeaders(Fuente, [PromoteAllScalars = true]),
+				    Tipos = Table.TransformColumnTypes(Encabezados, {{"pedido_id", type text}, {"cliente_id", type text}, {"fecha_compra", type date}, {"estado_cliente", type text}, {"estado_pedido", type text}, {"es_valido", Int64.Type}, {"items", Int64.Type}, {"valor_mercancia", Currency.Type}, {"flete", Currency.Type}, {"valor_pagado", Currency.Type}, {"medio_pago", type text}, {"cuotas", Int64.Type}, {"tramo_cuotas", type text}, {"dias_entrega", type number}, {"dias_prometidos", Int64.Type}, {"entregado", Int64.Type}, {"tarde", Int64.Type}, {"dias_atraso", Int64.Type}, {"tramo_atraso", type text}, {"resena", Int64.Type}}, "en-US")
+				in
+				    Tipos
+
+	annotation PBI_ResultType = Table

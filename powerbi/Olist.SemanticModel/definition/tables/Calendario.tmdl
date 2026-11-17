@@ -1,0 +1,105 @@
+table Calendario
+	lineageTag: e9f7a847-aebc-8ee1-572c-53f29d959dd7
+	dataCategory: Time
+
+	column Fecha
+		dataType: dateTime
+		isKey
+		formatString: yyyy-mm-dd
+		lineageTag: 51089f36-efad-a94a-a063-e01edc3419f9
+		summarizeBy: none
+		sourceColumn: fecha
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Año'
+		dataType: int64
+		formatString: 0
+		lineageTag: e40cc2d8-369d-3671-e882-84573924f741
+		summarizeBy: none
+		sourceColumn: anio
+
+		annotation SummarizationSetBy = Automatic
+
+	column Trimestre
+		dataType: int64
+		formatString: 0
+		lineageTag: b7581b0e-50d2-47d1-81fa-1a4c6507b26c
+		summarizeBy: none
+		sourceColumn: trimestre
+
+		annotation SummarizationSetBy = Automatic
+
+	column mes_num
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ec90184b-3008-251b-755e-a87fda8b67d0
+		summarizeBy: none
+		sourceColumn: mes_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column Mes
+		dataType: string
+		lineageTag: 505f3771-f10e-7fad-4342-a88356e69205
+		summarizeBy: none
+		sourceColumn: anio_mes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Nombre del mes'
+		dataType: string
+		lineageTag: cc9cb78c-49a6-4004-28e4-b7cab6a3a4c0
+		summarizeBy: none
+		sourceColumn: mes
+		sortByColumn: mes_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column dia_semana_num
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 6ec6cefa-4baf-b194-329b-8ca01ce0ae9f
+		summarizeBy: none
+		sourceColumn: dia_semana_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Día de la semana'
+		dataType: string
+		lineageTag: f0bef8f4-924d-2769-5a83-38f73b4f203f
+		summarizeBy: none
+		sourceColumn: dia_semana
+		sortByColumn: dia_semana_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column mes_completo
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ce0dd54b-a6fb-79c7-e4fb-39ba40a31598
+		summarizeBy: none
+		sourceColumn: mes_completo
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Calendario = m
+		mode: import
+		source =
+				let
+				    Archivo = "dim_fecha.csv",
+				    Binario = if Text.StartsWith(DataPath, "http")
+				        then Web.Contents(DataPath, [RelativePath = Archivo])
+				        else File.Contents(DataPath & Archivo),
+				    Fuente = Csv.Document(Binario, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Encabezados = Table.PromoteHeaders(Fuente, [PromoteAllScalars = true]),
+				    Tipos = Table.TransformColumnTypes(Encabezados, {{"fecha", type date}, {"anio", Int64.Type}, {"trimestre", Int64.Type}, {"mes_num", Int64.Type}, {"anio_mes", type text}, {"mes", type text}, {"dia_semana_num", Int64.Type}, {"dia_semana", type text}, {"mes_completo", Int64.Type}}, "en-US")
+				in
+				    Tipos
+
+	annotation PBI_ResultType = Table

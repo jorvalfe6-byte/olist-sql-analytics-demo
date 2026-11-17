@@ -31,6 +31,7 @@ echo "→ staging";   "${PSQL[@]}" -v datadir="$DATA_DIR" -f "$ROOT/sql/02_load_
 echo "→ core";      "${PSQL[@]}" -f "$ROOT/sql/03_transform.sql"
 echo "→ marts";     "${PSQL[@]}" -f "$ROOT/sql/04_marts.sql"
 echo "→ dashboard"; "${PSQL[@]}" -f "$ROOT/sql/05_dashboard_views.sql"
+echo "→ power bi";  "${PSQL[@]}" -f "$ROOT/sql/06_powerbi_views.sql"
 echo "→ validación"
 controles="$("${PSQL[@]}" -f "$ROOT/sql/analysis/00_calidad_datos.sql")"
 echo "$controles"

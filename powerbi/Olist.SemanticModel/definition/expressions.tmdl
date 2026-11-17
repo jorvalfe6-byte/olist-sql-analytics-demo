@@ -1,0 +1,10 @@
+/// Carpeta local (con barra final) o URL raw de GitHub (con barra final) donde están los CSV.
+expression DataPath =
+		"https://raw.githubusercontent.com/jorvalfe6-byte/olist-sql-analytics-demo/main/powerbi/data/" meta [
+			IsParameterQuery = true,
+			Type = "Text",
+			IsParameterQueryRequired = true
+		]
+	lineageTag: 31f000b1-6220-a657-4cac-d7a98476bd52
+
+	annotation PBI_ResultType = Text

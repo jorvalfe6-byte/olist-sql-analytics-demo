@@ -1,0 +1,20 @@
+relationship 7232f877-b4dc-48b5-3516-e38ddc3a25f7
+	fromColumn: Pedidos.fecha_compra
+	toColumn: Calendario.Fecha
+
+relationship 1ac914ce-0d1b-4c01-492f-a19778807a05
+	fromColumn: 'Ítems'.fecha_compra
+	toColumn: Calendario.Fecha
+
+relationship b2935a05-102a-ade0-89d4-5102ca22b78b
+	fromColumn: Pedidos.estado_cliente
+	toColumn: Estado.Estado
+
+relationship d1bd8b75-ef7a-dae6-d988-179dd206ed12
+	fromColumn: 'Ítems'.estado_cliente
+	toColumn: Estado.Estado
+
+relationship b45931e2-16a1-ea59-3ebd-0a32dee70eea
+	fromColumn: 'Ítems'.categoria
+	toColumn: 'Categoría'.'Categoría'
+

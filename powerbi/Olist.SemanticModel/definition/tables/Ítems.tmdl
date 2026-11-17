@@ -1,0 +1,143 @@
+/// Grano: 1 fila por ítem vendido (mart.fact_item).
+table 'Ítems'
+	lineageTag: bd67942e-2f87-7cdc-1935-65ef67893773
+
+	/// Mismo GMV que en Pedidos, calculado desde los ítems para cortarlo por categoría y vendedor.
+	measure 'GMV por ítems' = CALCULATE(SUM('Ítems'[precio]), 'Ítems'[es_valido] = 1)
+		formatString: "R$ "#,0
+		lineageTag: 68c8f3a6-15e7-6405-aed5-c090b9c1d58b
+
+	measure '% del GMV' = DIVIDE([GMV por ítems], CALCULATE([GMV por ítems], REMOVEFILTERS('Categoría')))
+		formatString: 0.0%
+		lineageTag: 3761e8ad-7809-0393-8c46-0eebb058f497
+
+	/// Pareto: participación acumulada de las categorías ordenadas de mayor a menor GMV.
+	measure '% GMV acumulado' = ```
+			VAR actual = [GMV por ítems]
+			VAR tabla =
+			    ADDCOLUMNS(ALLSELECTED('Categoría'[Categoría]), "@gmv", [GMV por ítems])
+			VAR acumulado = SUMX(FILTER(tabla, [@gmv] >= actual), [@gmv])
+			RETURN DIVIDE(acumulado, SUMX(tabla, [@gmv]))
+			```
+		formatString: 0.0%
+		lineageTag: 381fb72d-b9a1-1679-8492-58e1b87bc398
+
+	measure Vendedores = CALCULATE(DISTINCTCOUNT('Ítems'[vendedor_id]), 'Ítems'[es_valido] = 1)
+		formatString: #,0
+		lineageTag: a6cef5dd-59a7-3a07-30f8-624e1e4fa27c
+
+	measure 'Categorías' = CALCULATE(DISTINCTCOUNT('Ítems'[categoria]), 'Ítems'[es_valido] = 1)
+		formatString: #,0
+		lineageTag: 25df3ddf-b1fb-2b08-4faf-117255e285f3
+
+	column pedido_id
+		dataType: string
+		isHidden
+		lineageTag: 1c31c5f0-b606-03b0-8669-884b09df0c1c
+		summarizeBy: none
+		sourceColumn: pedido_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column item_n
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 3cbbc7a7-0ebe-5fac-951d-2a352e757387
+		summarizeBy: none
+		sourceColumn: item_n
+
+		annotation SummarizationSetBy = Automatic
+
+	column fecha_compra
+		dataType: dateTime
+		isHidden
+		formatString: yyyy-mm-dd
+		lineageTag: 575dac68-104a-60a3-3665-9f498c629d4e
+		summarizeBy: none
+		sourceColumn: fecha_compra
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column categoria
+		dataType: string
+		isHidden
+		lineageTag: 8eea671e-d347-cf35-0841-0f98b0884fcb
+		summarizeBy: none
+		sourceColumn: categoria
+
+		annotation SummarizationSetBy = Automatic
+
+	column vendedor_id
+		dataType: string
+		isHidden
+		lineageTag: 2f4277f7-d211-c1f1-0ee2-155e0ebaa1c4
+		summarizeBy: none
+		sourceColumn: vendedor_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estado del vendedor'
+		dataType: string
+		lineageTag: c41dabb3-037b-19e4-d3d7-80a428748c9e
+		summarizeBy: none
+		sourceColumn: estado_vendedor
+
+		annotation SummarizationSetBy = Automatic
+
+	column estado_cliente
+		dataType: string
+		isHidden
+		lineageTag: 695c1c6f-3dfa-b7ef-a0b1-6823c7808ab3
+		summarizeBy: none
+		sourceColumn: estado_cliente
+
+		annotation SummarizationSetBy = Automatic
+
+	column es_valido
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0b64d01b-3e3c-6d7c-137f-5a9d996a6b16
+		summarizeBy: none
+		sourceColumn: es_valido
+
+		annotation SummarizationSetBy = Automatic
+
+	column precio
+		dataType: decimal
+		isHidden
+		formatString: #,0.00
+		lineageTag: a90977f0-d210-1e08-3b2b-461ae8994c83
+		summarizeBy: none
+		sourceColumn: precio
+
+		annotation SummarizationSetBy = Automatic
+
+	column flete
+		dataType: decimal
+		isHidden
+		formatString: #,0.00
+		lineageTag: e4c62b5b-ba0b-528b-edfa-7b1797865eec
+		summarizeBy: none
+		sourceColumn: flete
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Ítems' = m
+		mode: import
+		source =
+				let
+				    Archivo = "fact_item.csv",
+				    Binario = if Text.StartsWith(DataPath, "http")
+				        then Web.Contents(DataPath, [RelativePath = Archivo])
+				        else File.Contents(DataPath & Archivo),
+				    Fuente = Csv.Document(Binario, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Encabezados = Table.PromoteHeaders(Fuente, [PromoteAllScalars = true]),
+				    Tipos = Table.TransformColumnTypes(Encabezados, {{"pedido_id", type text}, {"item_n", Int64.Type}, {"fecha_compra", type date}, {"categoria", type text}, {"vendedor_id", type text}, {"estado_vendedor", type text}, {"estado_cliente", type text}, {"es_valido", Int64.Type}, {"precio", Currency.Type}, {"flete", Currency.Type}}, "en-US")
+				in
+				    Tipos
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,42 @@
+table Estado
+	lineageTag: ee320b08-9c7f-f06b-50df-9a422c22d12a
+
+	column Estado
+		dataType: string
+		lineageTag: 11c16e52-f31b-66bc-13b0-c202a69f1f4f
+		summarizeBy: none
+		sourceColumn: estado
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Nombre del estado'
+		dataType: string
+		lineageTag: 564e2972-16be-52ba-e6de-edf69ac96a5c
+		summarizeBy: none
+		sourceColumn: nombre
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Región'
+		dataType: string
+		lineageTag: 08cfc829-a703-a74d-2b68-e260298bdc1e
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Estado = m
+		mode: import
+		source =
+				let
+				    Archivo = "dim_estado.csv",
+				    Binario = if Text.StartsWith(DataPath, "http")
+				        then Web.Contents(DataPath, [RelativePath = Archivo])
+				        else File.Contents(DataPath & Archivo),
+				    Fuente = Csv.Document(Binario, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Encabezados = Table.PromoteHeaders(Fuente, [PromoteAllScalars = true]),
+				    Tipos = Table.TransformColumnTypes(Encabezados, {{"estado", type text}, {"nombre", type text}, {"region", type text}}, "en-US")
+				in
+				    Tipos
+
+	annotation PBI_ResultType = Table

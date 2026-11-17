@@ -1,0 +1,26 @@
+table 'Categoría'
+	lineageTag: 682e7149-1e60-360f-eead-f0e6de3d61a0
+
+	column 'Categoría'
+		dataType: string
+		lineageTag: 91dc746d-8962-7818-5783-98d8d080cb50
+		summarizeBy: none
+		sourceColumn: categoria
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Categoría' = m
+		mode: import
+		source =
+				let
+				    Archivo = "dim_categoria.csv",
+				    Binario = if Text.StartsWith(DataPath, "http")
+				        then Web.Contents(DataPath, [RelativePath = Archivo])
+				        else File.Contents(DataPath & Archivo),
+				    Fuente = Csv.Document(Binario, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Encabezados = Table.PromoteHeaders(Fuente, [PromoteAllScalars = true]),
+				    Tipos = Table.TransformColumnTypes(Encabezados, {{"categoria", type text}}, "en-US")
+				in
+				    Tipos
+
+	annotation PBI_ResultType = Table

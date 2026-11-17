@@ -1,0 +1,141 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "9bbb4f5ab318e081cdd6",
+  "position": {
+    "x": 640,
+    "y": 204,
+    "z": 1008,
+    "height": 492,
+    "width": 616,
+    "tabOrder": 1008
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "drillFilterOtherVisuals": true,
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Estado"
+                    }
+                  },
+                  "Property": "Nombre del estado"
+                }
+              },
+              "queryRef": "Estado.Nombre del estado",
+              "nativeQueryRef": "Nombre del estado"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Estado"
+                    }
+                  },
+                  "Property": "Región"
+                }
+              },
+              "queryRef": "Estado.Región",
+              "nativeQueryRef": "Región"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Pedidos"
+                    }
+                  },
+                  "Property": "Entregas"
+                }
+              },
+              "queryRef": "Pedidos.Entregas",
+              "nativeQueryRef": "Entregas"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Pedidos"
+                    }
+                  },
+                  "Property": "% entregas tarde"
+                }
+              },
+              "queryRef": "Pedidos.% entregas tarde",
+              "nativeQueryRef": "% entregas tarde"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Pedidos"
+                    }
+                  },
+                  "Property": "Días de entrega promedio"
+                }
+              },
+              "queryRef": "Pedidos.Días de entrega promedio",
+              "nativeQueryRef": "Días de entrega promedio"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Pedidos"
+                  }
+                },
+                "Property": "% entregas tarde"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Entregas por estado'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "12D"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

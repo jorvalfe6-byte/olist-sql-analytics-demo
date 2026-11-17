@@ -4,3 +4,5 @@
 *.duckdb
 .env
 .DS_Store
+# Los CSV que lee el informe de Power BI sí se versionan (son pequeños o agregados)
+!/powerbi/data/*.csv
